@@ -1,0 +1,35 @@
+curl --location 'http://127.0.0.1:9445/cognitiveservices/v1' \
+--header 'Content-Type: application/ssml+xml' \
+--header 'Speech-Language: ar-AE' \
+--header 'X-MICROSOFT-OutputFormat: audio-16khz-32kbitrate-mono-mp3' \
+--data '<?xml version="1.0" encoding="UTF-8"?>
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="ar-AE">
+<voice name="ar-AE-HamdanNeural">
+     آخر معاملات 
+</voice>
+</speak>' --output outputfile.mp3
+
+
+curl --location 'http://127.0.0.1:9447/cognitiveservices/v1' \
+--header 'Content-Type: application/ssml+xml' \
+--header 'Speech-Language: en-US' \
+--header 'X-MICROSOFT-OutputFormat: audio-16khz-32kbitrate-mono-mp3' \
+--data '<?xml version="1.0" encoding="UTF-8"?>
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="en-US">
+<voice name="en-US-JennyNeural">
+    Hello, testing ji
+</voice>
+</speak>' --output outputfile_without_FQDN.mp3
+ 
+ 
+ 
+curl -k --location 'https://azurespeech.etisalat.corp.ae/tts_jenny_container2/cognitiveservices/v1' \
+--header 'Content-Type: application/ssml+xml' \
+--header 'Speech-Language: en-US' \
+--header 'X-MICROSOFT-OutputFormat: audio-16khz-32kbitrate-mono-mp3' \
+--data '<?xml version="1.0" encoding="UTF-8"?>
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="en-US">
+<voice name="en-US-JennyNeural">
+    Hello, testing ji
+</voice>
+</speak>' --output outputfile_with_FQDN.mp3
