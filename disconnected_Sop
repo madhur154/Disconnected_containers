@@ -1,0 +1,262 @@
+Disconnected Sop
+Steps: -
+•	1. Request access to use containers in disconnected environments (FORM LINK - https://aka.ms/csdisconnectedcontainers)
+•	2. Purchase a commitment plan to use containers in disconnected environments 
+•	3. Procuring a VM for installing Docker
+•	4. Deployment of Disconnected Container
+•	5. Sanity Testing of Disconnected Container
+Pre-requisite: -
+•	Docker must be installed.
+•	MCR registry url must be whitelisted (after downloading docker image it can be blocked)
+•	Url for downloading model and license should be whitelisted - https://<region>. api.cognitive.microsoft.com/ (after container is running we can block this url)
+•	We can test the containers using cURL command or install Python to test using script. 
+Detailed Steps: -
+	After successfully installing docker we need to change docker root diretory because downloading models and container images can consume a lot of storage and default docker root directory (var/lib/docker) need to be replaced with maximum storage capacity directory (in our case /SpeechService has the maximum storage capacity). Steps for changing root directory:
+1.	Go to /etc/docker/daemon.json (if daemon.json not present we can create)
+2.	Then {
+“data-root”:  “/SpeechService/docker”
+}
+3.	Then restart the docker “systemctl restart docker” and check if docker root dir is changed by command “docker info”.
+
+	Now download the docker images for containers:
+•	For STT - “docker pull mcr.microsoft.com/azure-cognitive-services/speechservices/custom-speech-to-text:latest”
+•	For TTS- 
+	image for Arabic – “docker pull mcr.microsoft.com/azure-cognitive-services/speechservices/neural-text-to-speech:3.2.0-amd64-ar-ae-hamdanneural”
+	image for English – “docker pull mcr.microsoft.com/azure-cognitive-services/speechservices/neural-text-to-speech:3.2.0-amd64-en-us-jennyneural”
+
+	Now create directory structure for models, license, output to get downloaded
+1.	For ex create directory - /SpeechService/app/speech/disconnected_Info – then three separate directories for License, Model, Output 
+                                                          
+ licenses
+├── custom_stt
+│   ├── ar_ae
+│   │   └── 4d0275c3-4e07-4e13-bf64-91d833da4937
+│   │       └── license.dat
+│   └── en_us
+│       └── e343f8fe-c4a3-464a-aab8-bd0c83695178
+│           └── license.dat
+├── tts
+│   ├── ar_ae
+│   │   └── hamdanneural
+│   │       └── license.dat
+│   └── en_us
+│       └── jennyneural
+│           └── license.dat
+
+outputs
+└── custom_stt
+    └── ar_ae
+        └── 4d0275c3-4e07-4e13-bf64-91d833da4937
+            ├── customspeechtotext
+            │   ├── 11c8f7dc6e18
+            │   │   └── billing-record-12-2024.json
+            │   └── 88393c92495a
+            │       └── billing-record-12-2024.json
+            └── diarization
+                ├── 11c8f7dc6e18
+                │   └── billing-record-12-2024.json
+                └── 88393c92495a
+                    └── billing-record-12-2024.json
+
+ 
+
+2.	Now inside the directory create further path for isolating different type of containers (TTS/STT) and different language containers (Arabic/English).
+For ex – inside License there is 2 directories (custom_STT &TTS), then in each directory again there is 2 directory 1 for English and another for Arabic.
+3.	Now you have created directory structure it looks like -
+/SpeechService/app/speech/disconnected_info/licenses/custom_stt/ar_ae/4d0275c3-4e07-4e13-bf64-91d833da4937
+Now you have to give this directory “4d0275c3-4e07-4e13-bf64-91d833da4937” access to docker to download data inside with command    “chmod 777 4d0275c3-4e07-4e13-bf64-91d833da4937 ”
+4.	Now these directory path will be docker bind mount for downloading models, licenses.
+
+
+•	Steps to run English STT containers: -
+	First download the model :
+
+docker run --rm -it -p 5000:5000 --memory 8g --cpus 4 \
+-v {VOLUME_MOUNT}:/usr/local/models \
+mcr.microsoft.com/azure-cognitive-services/speechservices/custom-speech-to-text \
+ModelId={MODEL_ID} \
+Eula=accept \
+Billing={ENDPOINT_URI} \
+ApiKey={API_KEY}
+Example Arabic model command – 
+
+In our case we have used:
+docker run --rm -it -p 5029:5000 --memory 8g --cpus 4 \
+-v /SpeechService/app/speech/disconnected_info/custom_stt_models/en_us/e343f8fe-c4a3-464a-aab8-bd0c83695178:/usr/local/models \
+mcr.microsoft.com/azure-cognitive-services/speechservices/custom-speech-to-text:latest \
+ModelId=e343f8fe-c4a3-464a-aab8-bd0c83695178 \
+Eula=accept \
+Billing=https://proj-prod-ai-cs-cogstt.cognitiveservices.azure.com/ \
+ApiKey=e3d4e43eec074bb2998e96223a4c2538
+
+	Then download license for model:
+docker run --rm -it -p 5000:5000 \ 
+-v {LICENSE_MOUNT} \
+-v {MODEL_PATH} \
+{IMAGE} \
+eula=accept \
+billing={ENDPOINT_URI} \
+apikey={API_KEY} \
+DownloadLicense=True \
+Mounts:License={CONTAINER_LICENSE_DIRECTORY}
+In our case we have used:
+docker run --rm -it -p 5025:5000 -v /SpeechService/app/speech/disconnected_info/licenses/custom_stt/en_us/e343f8fe-c4a3-464a-aab8-bd0c83695178:/license \
+-v /SpeechService/app/speech/disconnected_info/custom_stt_models/en_us/e343f8fe-c4a3-464a-aab8-bd0c83695178:/usr/local/models \
+mcr.microsoft.com/azure-cognitive-services/speechservices/custom-speech-to-text:latest \
+eula=accept \
+billing=https://uaenorth.api.cognitive.microsoft.com/ \
+apikey=91564c23bb274d05af9cbcbf7ab04a97 \
+DownloadLicense=True \
+Mounts:License=/license
+
+	Then both model and license are downloaded now we can run the container: 
+
+docker run --rm -it -p 5000:5000 --memory {MEMORY_SIZE} --cpus {NUMBER_CPUS} \ 
+-v {LICENSE_MOUNT} \ 
+-v {OUTPUT_PATH} \
+-v {MODEL_PATH} \
+{IMAGE} \
+eula=accept \
+Mounts:License={CONTAINER_LICENSE_DIRECTORY}
+Mounts:Output={CONTAINER_OUTPUT_DIRECTORY}
+
+In our case we have used:
+docker run --name=stt_en_container1 --restart=always -d -p 9451:5000 --memory 8g --cpus 8 -v /SpeechService/app/speech/disconnected_info/licenses/custom_stt/en_us/e343f8fe-c4a3-464a-aab8-bd0c83695178:/license -v /SpeechService/app/speech/disconnected_info/outputs/custom_stt/en_us/e343f8fe-c4a3-464a-aab8-bd0c83695178:/output -v /SpeechService/app/speech/disconnected_info/custom_stt_models/en_us/e343f8fe-c4a3-464a-aab8-bd0c83695178:/usr/local/models mcr.microsoft.com/azure-cognitive-services/speechservices/custom-speech-to-text:latest eula=accept Mounts:License=/license Mounts:Output=/output
+(please ensure the output directory path is also created and given chmod 777 permission).
+Note – we have spined up 2 containers for English STT on port 9451 and 9452
+
+•	Steps to run Arabic STT containers: -
+	First download the model :
+
+docker run --rm -it -p 5000:5000 --memory 8g --cpus 4 \
+-v {VOLUME_MOUNT}:/usr/local/models \
+mcr.microsoft.com/azure-cognitive-services/speechservices/custom-speech-to-text \
+ModelId={MODEL_ID} \
+Eula=accept \
+Billing={ENDPOINT_URI} \
+ApiKey={API_KEY}
+Example Arabic model command – 
+
+In our case we have used:
+docker run --rm -it -p 5029:5000 --memory 8g --cpus 4 \
+-v /SpeechService/app/speech/disconnected_info/custom_stt_models/ar_ae/4d0275c3-4e07-4e13-bf64-91d833da4937:/usr/local/models \
+mcr.microsoft.com/azure-cognitive-services/speechservices/custom-speech-to-text:latest \
+ModelId=4d0275c3-4e07-4e13-bf64-91d833da4937 \
+Eula=accept \
+Billing=https://proj-prod-ai-cs-cogstt.cognitiveservices.azure.com/ \
+ApiKey=e3d4e43eec074bb2998e96223a4c2538
+
+	Then download license for model:
+docker run --rm -it -p 5000:5000 \ 
+-v {LICENSE_MOUNT} \
+-v {MODEL_PATH} \
+{IMAGE} \
+eula=accept \
+billing={ENDPOINT_URI} \
+apikey={API_KEY} \
+DownloadLicense=True \
+Mounts:License={CONTAINER_LICENSE_DIRECTORY}
+In our case we have used:
+
+docker run --rm -it -p 5025:5000 -v /SpeechService/app/speech/disconnected_info/licenses/custom_stt/ar_ae/4d0275c3-4e07-4e13-bf64-91d833da4937:/license \
+-v /SpeechService/app/speech/disconnected_info/custom_stt_models/ar_ae/4d0275c3-4e07-4e13-bf64-91d833da4937:/usr/local/models \
+mcr.microsoft.com/azure-cognitive-services/speechservices/custom-speech-to-text:latest \
+eula=accept \
+billing=https://uaenorth.api.cognitive.microsoft.com/sts/v1.0/issuetoken \
+apikey=91564c23bb274d05af9cbcbf7ab04a97 \
+DownloadLicense=True \
+Mounts:License=/license
+
+	Then both model and license are downloaded now we can run the container: 
+
+docker run --rm -it -p 5000:5000 --memory {MEMORY_SIZE} --cpus {NUMBER_CPUS} \ 
+-v {LICENSE_MOUNT} \ 
+-v {OUTPUT_PATH} \
+-v {MODEL_PATH} \
+{IMAGE} \
+eula=accept \
+Mounts:License={CONTAINER_LICENSE_DIRECTORY}
+Mounts:Output={CONTAINER_OUTPUT_DIRECTORY}
+
+In our case we have used:
+docker run --name=stt_ar_container1 --restart=always -d -p 9449:5000 --memory 8g --cpus 8 -v /SpeechService/app/speech/disconnected_info/licenses/custom_stt/ar_ae/4d0275c3-4e07-4e13-bf64-91d833da4937:/license -v /SpeechService/app/speech/disconnected_info/outputs/custom_stt/ar_ae/4d0275c3-4e07-4e13-bf64-91d833da4937:/output -v /SpeechService/app/speech/disconnected_info/custom_stt_models/ar_ae/4d0275c3-4e07-4e13-bf64-91d833da4937:/usr/local/models mcr.microsoft.com/azure-cognitive-services/speechservices/custom-speech-to-text:latest eula=accept Mounts:License=/license Mounts:Output=/output
+(please ensure the output directory path is also created and given chmod 777 permission).
+Note – we have spined up 2 containers for Arabic STT on port 9449 and 9450
+
+•	Steps to run English TTS containers: -
+	First, we have to download container image:
+docker pull mcr.microsoft.com/azure-cognitive-services/speechservices/neural-text-to-speech:3.2.0-amd64-en-us-jennyneural:latest
+
+	Then download license for model:
+docker run --rm -it -p 5000:5000 \ 
+-v {LICENSE_MOUNT} \
+{IMAGE} \
+eula=accept \
+billing={ENDPOINT_URI} \
+apikey={API_KEY} \
+DownloadLicense=True \
+Mounts:License={CONTAINER_LICENSE_DIRECTORY} 
+In our case we have used:
+
+docker run --rm -it -p 6020:5000 -v /SpeechService/app/speech/disconnected_info/licenses/tts/en_us/jennyneural:/license mcr.microsoft.com/azure-cognitive-services/speechservices/neural-text-to-speech:3.2.0-amd64-en-us-jennyneural eula=accept billing=https://uaenorth.api.cognitive.microsoft.com/sts/v1.0/issuetoken apikey=91564c23bb274d05af9cbcbf7ab04a97 DownloadLicense=True Mounts:License=/license
+
+	Now we will run the container: 
+
+docker run --rm -it -p 5000:5000 --memory {MEMORY_SIZE} --cpus {NUMBER_CPUS} \ 
+-v {LICENSE_MOUNT} \ 
+-v {OUTPUT_PATH} \
+{IMAGE} \
+eula=accept \
+Mounts:License={CONTAINER_LICENSE_DIRECTORY}
+Mounts:Output={CONTAINER_OUTPUT_DIRECTORY}
+In our case we have used:
+docker run --name=tts_jenny_container1 --restart=always -d -p 9446:5000 --memory=16g --cpus=8 -v /SpeechService/app/speech/project/info_dev/custom_lexicon/xml_files:/data/lexicon -v /SpeechService/app/speech/disconnected_info/licenses/tts/en_us/jennyneural:/license -v /SpeechService/app/speech/disconnected_info/outputs/tts/en_us/jennyneural:/output -e LOG_LEVEL=DEBUG mcr.microsoft.com/azure-cognitive-services/speechservices/neural-text-to-speech:3.2.0-amd64-en-us-jennyneural eula=accept Mounts:License=/license Mounts:Output=/output
+(please ensure the output directory path is also created and given chmod 777 permission).
+Note – we have spined up 2 containers for English TTS on port 9446 and 9447
+
+•	Steps to run Arabic TTS containers: -
+	First, we have to download container image:
+docker pull mcr.microsoft.com/azure-cognitive-services/speechservices/neural-text-to-speech:3.2.0-amd64-ar-ae-hamdanneural:latest
+
+	Then download license for model:
+docker run --rm -it -p 5000:5000 \ 
+-v {LICENSE_MOUNT} \
+{IMAGE} \
+eula=accept \
+billing={ENDPOINT_URI} \
+apikey={API_KEY} \
+DownloadLicense=True \
+Mounts:License={CONTAINER_LICENSE_DIRECTORY} 
+In our case we have used:
+
+docker run --rm -it -p 6020:5000 -v /SpeechService/app/speech/disconnected_info/licenses/tts/ar_ae/hamdanneural:/license mcr.microsoft.com/azure-cognitive-services/speechservices/neural-text-to-speech:3.2.0-amd64-ar-ae-hamdanneural eula=accept billing=https://uaenorth.api.cognitive.microsoft.com/ apikey=91564c23bb274d05af9cbcbf7ab04a97 DownloadLicense=True Mounts:License=/license
+	Now we will run the container: 
+
+docker run --rm -it -p 5000:5000 --memory {MEMORY_SIZE} --cpus {NUMBER_CPUS} \ 
+-v {LICENSE_MOUNT} \ 
+-v {OUTPUT_PATH} \
+{IMAGE} \
+eula=accept \
+Mounts:License={CONTAINER_LICENSE_DIRECTORY}
+Mounts:Output={CONTAINER_OUTPUT_DIRECTORY}
+In our case we have used:
+
+docker run --name=tts_hamdan_container1 --restart=always -d -p 9444:5000 --memory=16g --cpus=8 -v /SpeechService/app/speech/project/info_dev/custom_lexicon/xml_files:/data/lexicon -v /SpeechService/app/speech/disconnected_info/licenses/tts/ar_ae/hamdanneural:/license -v /SpeechService/app/speech/disconnected_info/outputs/tts/ar_ae/hamdanneural:/output -e LOG_LEVEL=DEBUG mcr.microsoft.com/azure-cognitive-services/speechservices/neural-text-to-speech:3.2.0-amd64-ar-ae-hamdanneural eula=accept Mounts:License=/license Mounts:Output=/output
+
+(please ensure the output directory path is also created and given chmod 777 permission).
+Note – we have spined up 2 containers for Arabic TTS on port 9444 and 9445
+
+•	Steps to run Arabic TTS containers: -
+After running all the STT and TTS containers we will check with “Docker ps” command. Now we can also test the container with loopback IP followed by port number of respective container.
+
+
+Reference Doc – 
+STT - Custom speech to text containers - Speech service - Azure AI services | Microsoft Learn
+TTS - Neural text to speech containers - Speech service - Azure AI services | Microsoft Learnh
+
+
+
+
+
+
+
