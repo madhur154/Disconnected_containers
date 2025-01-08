@@ -1,0 +1,135 @@
+Technical Documentation: Batch Transcription of WAV Audio Files Using Azure Speech-to-Text Containers
+________________________________________
+Overview
+This comprehensive documentation outlines the processes and tools required to achieve two key tasks:
+1.	Transcribing WAV audio files into JSON format using Azure Speech-to-Text (STT) containers: This guide covers the setup for both English and Arabic STT containers and the configuration of a batch processing system for efficient transcription.
+2.	Converting JSON files into Excel (.xlsx) format: This process involves automated and manual Python scripts. This includes a folder watcher script for real-time conversion and a standalone script for bulk processing.
+By following this guide, users can seamlessly integrate Azure Speech services with data conversion workflows to handle multilingual audio-to-text transcription and structured data transformation.
+________________________________________
+Prerequisites
+To follow this guide, ensure you have the following prerequisites:
+1.	Docker: Installed on your system.
+2.	Azure Subscription: An active Azure subscription with access to the Speech service.
+3.	API Key and Endpoint: Obtain these from the Azure portal.
+4.	Batch Processing Kit: Download the Azure Speech Batch Kit.
+________________________________________
+Step 1: Pull the Speech-to-Text Container Images
+Pull the container images for Speech-to-Text:
+docker pull docker.io/batchkit/speech-batch-kit:latest
+For specific languages, such as Arabic, refer to the Speech-to-Text container images documentation.
+________________________________________
+Step 2: Run the Speech-to-Text Containers
+Start two separate containers for English and Arabic transcription:
+•	English STT Container:
+•	docker run --rm -it -p 5000:5000 --memory 8g --cpus 4 \
+•	mcr.microsoft.com.rproxy.goskope.com/azure-cognitive-services/speechservices/speech-to-text \
+•	Eula=accept \
+•	Billing={ENDPOINT_URI} \
+•	ApiKey={API_KEY}
+•	Arabic STT Container:
+•	docker run --rm -it -p 5001:5000 --memory 8g --cpus 4 \
+•	mcr.microsoft.com.rproxy.goskope.com/azure-cognitive-services/speechservices/speech-to-text:4.10.0-amd64-ar-eg \
+•	Eula=accept \
+•	Billing={ENDPOINT_URI} \
+•	ApiKey={API_KEY}
+Note: Replace {ENDPOINT_URI} and {API_KEY} with your Azure Speech service endpoint and API key.
+________________________________________
+Step 3: Configure the Batch Processing Kit
+Create separate configuration files for English and Arabic (e.g., config_english.yaml and config_arabic.yaml) for the batch processing kit:
+English Configuration (config_english.yaml):
+stt_en_container1:
+  concurrency: 5
+  host: 127.0.0.1
+  port: 9451
+  language: en-US
+stt_en_container2:
+  concurrency: 5
+  host: 127.0.0.1
+  port: 9452
+  language: en-US
+Arabic Configuration (config_arabic.yaml):
+stt_ar_container1:
+  concurrency: 5
+  host: 127.0.0.1
+  port: 9449
+  language: ar-AE
+stt_ar_container2:
+  concurrency: 5
+  host: 127.0.0.1
+  port: 9450
+  language: ar-AE
+•	concurrency: Maximum concurrent transcriptions per container.
+•	host and port: Specify the container’s hostname and port.
+•	language: Language to be used.
+Note: You can add as many containers in the configuration file as needed, based on your already running containers.
+________________________________________
+Step 4: Prepare Input Audio Files
+Organize your WAV audio files into directories by language. For example:
+•	/path/to/english_input
+•	/path/to/arabic_input
+________________________________________
+Step 5: Run the Batch Processing Kit
+Execute the batch processing kit using Docker with separate commands for English and Arabic:
+•	English Batch Processing Command:
+•	docker run --network host --rm -ti -v /home/mluser/app/speech/project/utsav/code/arabic:/my_nfs docker.io/batchkit/speech-batch-kit:latest -config /my_nfs/config.yaml -input_folder /my_nfs/audio_files -output_folder /my_nfs/json_files -diarization Identity -m DAEMON
+•	Arabic Batch Processing Command:
+•	docker run --network host --rm -ti -v /home/mluser/app/speech/project/utsav/code/english:/my_nfs docker.io/batchkit/speech-batch-kit:latest -config /my_nfs/config.yaml -input_folder /my_nfs/audio_files -output_folder /my_nfs/json_files -diarization Identity -m DAEMON
+•	--config: Path to the configuration file.
+•	--input: Directory containing input audio files.
+•	--output: Directory for transcription results.
+•	-diarization Identity: Enables speaker diarization and sets the diarization method to "Identity".
+•	-m DAEMON: Runs the tool in daemon mode, useful for long-running processing tasks.
+________________________________________
+Step 6: Retrieve and Process Transcriptions
+After processing, transcription results will be saved in the respective output directories (e.g., english_output and arabic_output) as JSON files. Review these files for accuracy and integrate them into your application.
+________________________________________
+JSON to Excel Conversion Scripts
+Overview
+This section describes two Python scripts designed to convert JSON files into Excel (.xlsx) format:
+1.	Watcher Script: Automatically monitors a folder for new .json files and converts them into .xlsx files when added to the folder.
+2.	Standalone Conversion Script: Manually processes all .json files from an input folder and saves them as .xlsx files in an output folder.
+________________________________________
+Watcher Script
+Objective: Automatically monitor a directory for new .json files and convert them to .xlsx format using the pandas library. The script works continuously and processes each newly created .json file as soon as it appears.
+Dependencies:
+•	watchdog: Monitors the directory for file system events.
+•	pandas: Converts JSON data to a tabular format and exports it to Excel.
+•	openpyxl: Required by pandas to handle Excel files.
+Installation:
+pip install watchdog pandas openpyxl
+Usage:
+1.	Setup Folders: Define two folders:
+o	Input Folder: Directory to watch for new .json files.
+o	Output Folder: Directory where converted .xlsx files will be saved.
+2.	Run the Script: The script will run indefinitely, monitoring the folder for new files. When a new .json file is added, it will automatically convert the file to Excel and save it to the output folder.
+________________________________________
+Standalone Conversion Script
+Objective: Manually convert all .json files from an input folder to .xlsx files in an output folder. This script processes the files when you run it, rather than automatically detecting new files.
+Dependencies:
+•	pandas: Used for JSON to Excel conversion.
+•	openpyxl: Required by pandas for Excel file handling.
+Installation:
+pip install pandas openpyxl
+Usage:
+1.	Set Up Folders: Define paths to the input folder (which contains .json files) and the output folder (where .xlsx files will be saved).
+2.	Run the Script: The script will loop through all .json files in the input folder, convert each to .xlsx, and save it to the output folder.
+________________________________________
+Location of Current Working Code
+The current working code is located at:
+/home/mluser/app/speech/project/utsav/
+________________________________________
+Additional Notes
+•	Resource Allocation: Ensure adequate CPU and memory resources for efficient processing.
+•	Language Identification: Use language detection if your files include multiple languages.
+•	Error Handling: Implement logging and error management for smooth operation.
+________________________________________
+References
+1.	Azure Speech Containers Documentation
+2.	Batch Processing Kit GitHub Repository
+3.	Docker Documentation
+4.	JSON to Excel Conversion Documentation
+________________________________________
+This concludes the documentation for batch transcription of WAV audio files and JSON to Excel conversion. Follow the steps carefully for successful implementation.
+________________________________________
+Let me know if you need any further adjustments!
+
